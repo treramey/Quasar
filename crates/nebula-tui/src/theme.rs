@@ -2,6 +2,8 @@
 //! hardcoded at the call site. The active theme is picked by name in the
 //! settings overlay (`theme` in config.json) and lives on `App`, refreshed
 //! by the event loop when the setting changes.
+//! The default theme follows Omarchy's active colors.toml when present.
+//! Named presets remain independent of the desktop theme.
 //!
 //! Presets stick to ANSI-16 and 256-color indexed values so they render
 //! everywhere. One exception: `focus_tint` needs a near-black shade of the
@@ -26,6 +28,8 @@ pub const THEMES: &[&str] = &[
 /// Semantic color roles for the whole TUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
+    /// Omarchy supplies the canvas as well as foreground roles.
+    pub background: Option<Color>,
     /// Focus borders, titles, cursors, match highlights.
     pub accent: Color,
     /// Text drawn on top of an `accent` background (focused title chip).
@@ -128,6 +132,7 @@ impl Default for Theme {
     fn default() -> Self {
         // The classic nebula look: cyan accent on ANSI colors.
         Self {
+            background: None,
             accent: Color::Cyan,
             on_accent: Color::Black,
             text: Color::White,
@@ -159,6 +164,15 @@ impl Default for Theme {
 
 impl Theme {
     pub fn by_name(name: &str) -> Self {
+        if name.trim().eq_ignore_ascii_case("default") {
+            if let Some(theme) = omarchy_theme() {
+                return theme;
+            }
+        }
+        Self::preset(name)
+    }
+
+    fn preset(name: &str) -> Self {
         let base = Self::default();
         match name.trim().to_ascii_lowercase().as_str() {
             "ocean" => Self {
@@ -250,6 +264,128 @@ impl Theme {
     }
 }
 
+/// Read the active Omarchy palette without changing application settings.
+/// Missing or incomplete palettes retain the built-in theme.
+pub fn omarchy_theme() -> Option<Theme> {
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+    // Bound filesystem reads even when several widgets ask during a frame.
+    static CACHE: OnceLock<Mutex<(Instant, Option<Theme>)>> = OnceLock::new();
+    let mut cache = CACHE
+        .get_or_init(|| Mutex::new((Instant::now(), load_omarchy_theme())))
+        .lock()
+        .ok()?;
+    if cache.0.elapsed() >= Duration::from_secs(1) {
+        *cache = (Instant::now(), load_omarchy_theme());
+    }
+    cache.1
+}
+
+fn load_omarchy_theme() -> Option<Theme> {
+    let home = nebula_core::env::home_dir()?;
+    let config = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|p| !p.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| home.join(".config"));
+    load_omarchy_theme_at(&home, &config)
+}
+
+fn load_omarchy_theme_at(home: &std::path::Path, config: &std::path::Path) -> Option<Theme> {
+    // omarchy-theme-set publishes here, independently of XDG_CONFIG_HOME.
+    // Only older installations publish under the config directory.
+    let current = home.join(".local/state/omarchy/current/theme/colors.toml");
+    let raw = match std::fs::read_to_string(current) {
+        Ok(raw) => raw,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::read_to_string(config.join("omarchy/current/theme/colors.toml")).ok()?
+        }
+        Err(_) => return None,
+    };
+    parse_omarchy_palette(&raw)
+}
+
+fn parse_omarchy_palette(raw: &str) -> Option<Theme> {
+    // Omarchy's color contract is a flat table of quoted #RRGGBB values.
+    let mut colors = std::collections::HashMap::new();
+    for line in raw.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let value = value.trim();
+        let Some(quote) = value.chars().next() else {
+            continue;
+        };
+        if !matches!(quote, '\'' | '"') {
+            continue;
+        }
+        let Some(hex) = value[1..]
+            .split_once(quote)
+            .map(|(hex, _)| hex)
+            .and_then(|v| v.strip_prefix('#'))
+        else {
+            continue;
+        };
+        if hex.len() != 6 || !hex.is_ascii() {
+            continue;
+        }
+        let Ok(rgb) = u32::from_str_radix(hex, 16) else {
+            continue;
+        };
+        colors.insert(
+            key.trim(),
+            Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8),
+        );
+    }
+    let get = |key| colors.get(key).copied();
+    let bg = get("background")?;
+    let fg = get("foreground")?;
+    let accent = get("accent")?;
+    let warn = get("color3")?;
+    let err = get("color1")?;
+    let merged = get("color5")?;
+    let done = get("color4")?;
+    let sweep = |c| [c, blend(c, fg, 0.3), blend(c, fg, 0.6)];
+    Some(Theme {
+        background: Some(bg),
+        accent,
+        on_accent: bg,
+        text: fg,
+        muted: blend(bg, fg, 0.7),
+        dim: blend(bg, fg, 0.5),
+        ok: get("color2")?,
+        done,
+        warn,
+        err,
+        special: get("color13").unwrap_or(merged),
+        merged,
+        root: warn,
+        worktree: get("color6")?,
+        sel_bg: get("selection_background").unwrap_or(blend(bg, accent, 0.25)),
+        sel_bg_dim: blend(bg, fg, 0.1),
+        edge: blend(bg, fg, 0.25),
+        warn_sweep: sweep(warn),
+        err_sweep: sweep(err),
+        merged_sweep: sweep(merged),
+        done_sweep: sweep(done),
+        focus_tint: blend(bg, accent, 0.12),
+    })
+}
+
+/// Interpolate RGB palette colors, clamping the blend to 0..=1.
+/// Non-RGB colors use the destination without guessing terminal RGB values.
+pub fn blend(from: Color, to: Color, amount: f32) -> Color {
+    match (from, to) {
+        (Color::Rgb(r, g, b), Color::Rgb(x, y, z)) => {
+            let mix = |a: u8, b: u8| {
+                (f32::from(a) + (f32::from(b) - f32::from(a)) * amount.clamp(0.0, 1.0)).round()
+                    as u8
+            };
+            Color::Rgb(mix(r, x), mix(g, y), mix(b, z))
+        }
+        _ => to,
+    }
+}
+
 /// The NESTED layout's grays (Settings → Appearance → **Worktree layout**
 /// → `nested`): a live root's title against an idle one's, the ages and
 /// counts, and the cursor row's fill. Truecolor, like `focus_tint`: an
@@ -258,6 +394,30 @@ impl Theme {
 /// — the status dots, the cursor's accent — is still the preset's own.
 pub mod nested {
     use ratatui::style::Color;
+
+    pub fn dim(th: super::Theme) -> Color {
+        if th.background.is_some() {
+            th.muted
+        } else {
+            DIM
+        }
+    }
+
+    pub fn bright(th: super::Theme) -> Color {
+        if th.background.is_some() {
+            th.text
+        } else {
+            BRIGHT
+        }
+    }
+
+    pub fn link(th: super::Theme) -> Color {
+        if th.background.is_some() {
+            th.done
+        } else {
+            LINK
+        }
+    }
 
     /// A live root's title: working, or waiting on you.
     pub const BRIGHT: Color = Color::Rgb(0xf2, 0xf2, 0xf2);
@@ -273,6 +433,50 @@ pub mod nested {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn omarchy_state_palette_takes_precedence_over_legacy_config() {
+        let home = tempfile::tempdir().unwrap();
+        let config = home.path().join("custom-config");
+        let state = home
+            .path()
+            .join(".local/state/omarchy/current/theme/colors.toml");
+        let legacy = config.join("omarchy/current/theme/colors.toml");
+        // Required colors from the installed Omarchy palette.
+        let raw = "background = \"#171b1a\"\nforeground = \"#b8c2ae\"\naccent = \"#7fa38d\"\ncolor1 = \"#b0573f\"\ncolor2 = \"#7f966b\"\ncolor3 = \"#c9a63a\"\ncolor4 = \"#6f8f96\"\ncolor5 = \"#8b6f5c\"\ncolor6 = \"#5c9680\"";
+        assert!(load_omarchy_theme_at(home.path(), &config).is_none());
+        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        std::fs::write(&legacy, raw.replace("#171b1a", "#ffffff")).unwrap();
+        assert_eq!(
+            load_omarchy_theme_at(home.path(), &config)
+                .unwrap()
+                .background,
+            Some(Color::Rgb(255, 255, 255))
+        );
+        std::fs::create_dir_all(state.parent().unwrap()).unwrap();
+        std::fs::write(&state, raw).unwrap();
+        let theme = load_omarchy_theme_at(home.path(), &config).unwrap();
+        assert_eq!(theme.background, Some(Color::Rgb(23, 27, 26)));
+        assert_eq!(theme.accent, Color::Rgb(127, 163, 141));
+        // An incomplete current palette must not activate a stale legacy one.
+        std::fs::write(&state, "accent = \"#broken\"").unwrap();
+        assert!(load_omarchy_theme_at(home.path(), &config).is_none());
+    }
+
+    #[test]
+    fn omarchy_palette_maps_roles_and_rejects_incomplete_input() {
+        let raw = "background = \"#101020\"\nforeground = \"#eeeeee\"\naccent = \"#80aaff\"\ncolor1 = \"#ee5555\"\ncolor2 = \"#55ee55\"\ncolor3 = \"#eeee55\"\ncolor4 = \"#5555ee\"\ncolor5 = \"#ee55ee\"\ncolor6 = \"#55eeee\"";
+        let th = parse_omarchy_palette(raw).unwrap();
+        assert_eq!(th.background, Some(Color::Rgb(16, 16, 32)));
+        assert_eq!(th.accent, Color::Rgb(128, 170, 255));
+        assert_eq!(th.err, Color::Rgb(238, 85, 85));
+        assert_eq!(th.warn_sweep[0], th.warn);
+        assert_ne!(th.focus_tint, th.background.unwrap());
+        assert!(parse_omarchy_palette("accent = \"#bad\"").is_none());
+        let light = parse_omarchy_palette(&raw.replace("#101020", "#ffffff")).unwrap();
+        assert_eq!(light.on_accent, Color::Rgb(255, 255, 255));
+        assert_ne!(light.focus_tint, th.focus_tint);
+    }
 
     /// Red, green, blue coordinates (0..=5) of a 6x6x6 cube color.
     fn cube(c: Color) -> Option<[u8; 3]> {
@@ -297,19 +501,19 @@ mod tests {
         for name in THEMES {
             // Every listed preset must parse (and not accidentally be a
             // misspelling that falls back to default without noticing).
-            let theme = Theme::by_name(name);
+            let theme = Theme::preset(name);
             if *name != "default" {
                 assert_ne!(theme, Theme::default(), "{name} fell back to default");
             }
         }
-        assert_eq!(Theme::by_name("no-such-theme"), Theme::default());
-        assert_eq!(Theme::by_name(" Ocean "), Theme::by_name("ocean"));
+        assert_eq!(Theme::preset("no-such-theme"), Theme::default());
+        assert_eq!(Theme::preset(" Ocean "), Theme::preset("ocean"));
 
         // A done dot has to stay readable AS done: never green (that's
         // `ok`, which the eye files as "nothing to do here"), and never
         // the same color as another status in the same preset.
         for name in THEMES {
-            let th = Theme::by_name(name);
+            let th = Theme::preset(name);
             assert_ne!(th.done, th.ok, "{name}: done reads as plain success");
             assert_ne!(th.done, th.warn, "{name}: done reads as running");
             assert_ne!(th.done, th.err, "{name}: done reads as needs-feedback");
@@ -326,7 +530,7 @@ mod tests {
     #[test]
     fn a_running_frame_never_reads_as_the_focus() {
         for name in THEMES {
-            let th = Theme::by_name(name);
+            let th = Theme::preset(name);
             assert_ne!(th.warn, th.accent, "{name}: running reads as the cursor");
             assert_ne!(th.warn, th.edge, "{name}: running reads as a quiet card");
         }
@@ -341,7 +545,7 @@ mod tests {
     #[test]
     fn done_is_never_a_shade_of_merged() {
         for name in THEMES {
-            let th = Theme::by_name(name);
+            let th = Theme::preset(name);
             assert!(
                 !th.merged_sweep.contains(&th.done),
                 "{name}: the merged sweep flashes the done color"
@@ -362,7 +566,7 @@ mod tests {
     #[test]
     fn done_sweep_rests_on_done_in_every_preset() {
         for name in THEMES {
-            let th = Theme::by_name(name);
+            let th = Theme::preset(name);
             assert_eq!(th.done_sweep[0], th.done, "{name}: the sweep rests on done");
             let [tail, mid, head] = th.done_sweep;
             assert!(
@@ -390,7 +594,7 @@ mod tests {
     #[test]
     fn the_two_scope_colors_are_a_hue_apart_in_every_preset() {
         for name in THEMES {
-            let th = Theme::by_name(name);
+            let th = Theme::preset(name);
             assert_ne!(th.root, th.worktree, "{name}: one scope, painted twice");
             let steps = cube_steps(th.root, th.worktree);
             assert!(
@@ -418,7 +622,7 @@ mod tests {
     #[test]
     fn accent_text_and_muted_stay_three_tiers_in_every_preset() {
         for name in THEMES {
-            let th = Theme::by_name(name);
+            let th = Theme::preset(name);
             assert_ne!(th.accent, th.text, "{name}: a match highlight vanishes");
             assert_ne!(th.text, th.muted, "{name}: secondary text reads as primary");
             assert_ne!(th.muted, th.dim, "{name}: secondary text reads as a hint");
@@ -436,7 +640,7 @@ mod tests {
     #[test]
     fn merged_is_purple_and_its_own_color_in_every_preset() {
         for name in THEMES {
-            let th = Theme::by_name(name);
+            let th = Theme::preset(name);
             assert_eq!(th.merged, Color::Indexed(135), "{name}: merged is purple");
             assert_ne!(th.merged, th.special, "{name}: merged reads as terminated");
             assert_ne!(th.merged, th.done, "{name}: merged reads as unread done");
@@ -483,7 +687,7 @@ mod tests {
             0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2])
         };
         for name in THEMES {
-            let th = Theme::by_name(name);
+            let th = Theme::preset(name);
             let Color::Rgb(r, g, b) = th.focus_tint else {
                 panic!("{name}: focus_tint must be truecolor RGB");
             };

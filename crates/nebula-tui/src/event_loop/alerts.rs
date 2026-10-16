@@ -1,4 +1,4 @@
-//! The two ways nebula reaches a user who is not looking at it: the DONE
+//! The two ways quasar reaches a user who is not looking at it: the DONE
 //! SOUND and FEEDBACK SOUND (`Config::done_sound` / `Config::feedback_sound`,
 //! played here), and the desktop notification a session that stops to ask
 //! posts while the terminal window is in the background. `event_loop.rs`
@@ -85,20 +85,20 @@ pub(super) fn notify_desktop(alerts: &[FeedbackAlert]) {
 
 /// The notifier to run for `alert`, as a program and its argv — never a
 /// shell line, so the only quoting is AppleScript's own. macOS shows
-/// *nebula* / *`<session>` needs feedback* / *`<project> · <branch>`*;
+/// *quasar* / *`<session>` needs feedback* / *`<project> · <branch>`*;
 /// `notify-send` gets the same as app name, summary and body.
 fn notifier_command(alert: &FeedbackAlert, macos: bool) -> (&'static str, Vec<String>) {
     let summary = format!("{} needs feedback", alert.session);
     if macos {
         let mut script = format!(
-            "display notification {} with title \"nebula\" subtitle {}",
+            "display notification {} with title \"quasar\" subtitle {}",
             applescript_str(&alert.place),
             applescript_str(&summary)
         );
         if alert.place.is_empty() {
             // No body to show: the subtitle carries the whole message.
             script = format!(
-                "display notification {} with title \"nebula\"",
+                "display notification {} with title \"quasar\"",
                 applescript_str(&summary)
             );
         }
@@ -106,7 +106,7 @@ fn notifier_command(alert: &FeedbackAlert, macos: bool) -> (&'static str, Vec<St
     } else {
         (
             "notify-send",
-            vec!["--app-name=nebula".into(), summary, alert.place.clone()],
+            vec!["--app-name=quasar".into(), summary, alert.place.clone()],
         )
     }
 }
@@ -154,7 +154,7 @@ mod tests {
     }
 
     /// The macOS notifier is `osascript -e <one display notification>`,
-    /// nebula as the title, the session as the subtitle, the place as the
+    /// quasar as the title, the session as the subtitle, the place as the
     /// body — and just the session when there is no place to name. Linux
     /// gets `notify-send` with the same three under its own names.
     #[test]
@@ -165,14 +165,14 @@ mod tests {
             args,
             [
                 "-e",
-                r#"display notification "demo · main" with title "nebula" subtitle "Fix Login needs feedback""#,
+                r#"display notification "demo · main" with title "quasar" subtitle "Fix Login needs feedback""#,
             ]
         );
 
         let (_, args) = notifier_command(&alert("agent-2", ""), true);
         assert_eq!(
             args[1],
-            r#"display notification "agent-2 needs feedback" with title "nebula""#
+            r#"display notification "agent-2 needs feedback" with title "quasar""#
         );
 
         let (program, args) = notifier_command(&alert("Fix Login", "demo · main"), false);
@@ -180,7 +180,7 @@ mod tests {
         assert_eq!(
             args,
             [
-                "--app-name=nebula",
+                "--app-name=quasar",
                 "Fix Login needs feedback",
                 "demo · main"
             ]

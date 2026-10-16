@@ -15,8 +15,8 @@
 #                 and whatever those still depend on)
 
 PREFIX      ?= $(HOME)/.cargo/bin
-RELEASE_BIN := target/release/nebula
-DEBUG_BIN   := target/debug/nebula
+RELEASE_BIN := target/release/quasar
+DEBUG_BIN   := target/debug/quasar
 
 # The dev instance is a second, complete nebula: its own socket, DB, and
 # settings — and one *per checkout*, so the main clone and every worktree can
@@ -159,7 +159,7 @@ dev-stop: ## Stop the dev daemon (it detaches, so quitting the TUI leaves it run
 	[ -f $$pidfile ] || exit 0; \
 	pid=$$(cat $$pidfile 2>/dev/null); \
 	case "$$pid" in ''|*[!0-9]*) exit 0;; esac; \
-	if ps -p $$pid -o command= 2>/dev/null | grep -q 'nebula daemon'; then \
+	if ps -p $$pid -o command= 2>/dev/null | grep -Eq '(nebula|quasar) daemon'; then \
 		kill $$pid 2>/dev/null || true; \
 	fi
 
@@ -173,6 +173,9 @@ build: ## Release build
 # for that inode no longer matches the new contents — every exec then dies
 # with SIGKILL (exit 137). A fresh inode forces signature re-validation.
 install: build ## Install to $(PREFIX) — warns if the live daemon is now stale
+	mkdir -p $(PREFIX)
+	cp $(RELEASE_BIN) $(PREFIX)/quasar.new
+	mv $(PREFIX)/quasar.new $(PREFIX)/quasar
 	cp $(RELEASE_BIN) $(PREFIX)/nebula.new
 	mv $(PREFIX)/nebula.new $(PREFIX)/nebula
 	@$(PREFIX)/nebula --version

@@ -3,6 +3,11 @@ name = "nebula"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+default-run = "quasar"
+
+[[bin]]
+name = "quasar"
+path = "src/quasar.rs"
 
 [[bin]]
 name = "nebula"

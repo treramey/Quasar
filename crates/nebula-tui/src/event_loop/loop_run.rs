@@ -146,6 +146,14 @@ macro_rules! main_loop_body {
             // Fixed deadline (not a fresh sleep per iteration) so heavy PTY
             // traffic can't starve the badge refresh.
             _ = tokio::time::sleep_until(next_git_poll) => {
+                // Follow theme switches even when the terminal is idle.
+                // A temporarily incomplete palette keeps the last good one.
+                if app.chrome.theme.background.is_some() {
+                    if let Some(theme) = crate::theme::omarchy_theme() {
+                        app.chrome.dirty |= app.chrome.theme != theme;
+                        app.chrome.theme = theme;
+                    }
+                }
                 request_git_changes(&mut app, &git_tx);
                 sweep_git_changes(&mut app, &sweep_git_tx);
                 // Rides the git tick rather than the repaint, so walking the

@@ -57,6 +57,11 @@ fn restarted_note(sessions: usize) -> String {
 }
 
 pub fn run_upgrade(force: bool) -> Result<()> {
+    // This fork has no release installer. Never replace it with upstream
+    // Nebula, including when invoked through the compatibility command.
+    if nebula_core::env::non_empty(nebula_core::env::INSTALL_URL).is_none() {
+        bail!("Quasar is installed from source. Update this checkout and run `make install`; no Quasar release installer is configured.");
+    }
     let url = install_url();
     // The runtime dir is already the 0700 auth boundary; staging the script
     // there keeps it out of a world-writable /tmp before we execute it.

@@ -57,7 +57,7 @@ fn every_visible_command_has_its_own_help_page() {
         let mut with_help = args.to_vec();
         with_help.push("--help");
         let help = help_at("100", &with_help);
-        let usage = format!("Usage: nebula {}", args.join(" "));
+        let usage = format!("Usage: quasar {}", args.join(" "));
         assert!(
             help.contains(&usage),
             "`nebula {} --help` is missing `{usage}`:\n{help}",

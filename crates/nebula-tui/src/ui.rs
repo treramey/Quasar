@@ -216,9 +216,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     app.chrome.rows_memo.arm();
     draw_screen(f, app);
     app.chrome.rows_memo.disarm();
-    if app.chrome.black_background {
+    if let Some(background) = app.chrome.theme.background {
         let area = f.area();
-        draw_black_background(f.buffer_mut(), area);
+        draw_default_background(f.buffer_mut(), area, background);
+    } else if app.chrome.black_background {
+        let area = f.area();
+        draw_default_background(f.buffer_mut(), area, crate::theme::BLACK_BACKGROUND);
     }
 }
 
@@ -906,17 +909,17 @@ fn draw_focus_tint(buf: &mut ratatui::buffer::Buffer, area: Rect, th: Theme) {
     }
 }
 
-/// The BLACK BACKGROUND setting: paint every cell still on the terminal's
-/// default background pure black. Runs last in a frame, after the overlays
+/// Paint the theme canvas, or the BLACK BACKGROUND setting, into cells still
+/// on the terminal's default background. Runs last, after the overlays
 /// and the focus tint, and — like the tint — only touches `Reset` cells, so
 /// selection fills, the tint and the colors a session draws itself stay on
 /// top of it.
-fn draw_black_background(buf: &mut ratatui::buffer::Buffer, area: Rect) {
+fn draw_default_background(buf: &mut ratatui::buffer::Buffer, area: Rect, background: Color) {
     for y in area.y..area.y + area.height {
         for x in area.x..area.x + area.width {
             if let Some(cell) = buf.cell_mut((x, y)) {
                 if cell.bg == Color::Reset {
-                    cell.bg = crate::theme::BLACK_BACKGROUND;
+                    cell.bg = background;
                 }
             }
         }
@@ -1758,7 +1761,7 @@ fn draw_empty_terminal_hero(f: &mut Frame, inner: Rect, th: Theme) {
     lines.push(Line::from(vec![
         Span::styled("◆ ", Style::default().fg(th.accent)),
         Span::styled(
-            "nebula",
+            "quasar",
             Style::default().fg(th.text).add_modifier(Modifier::BOLD),
         ),
     ]));
@@ -2462,13 +2465,32 @@ mod tests {
         let area = Rect::new(0, 0, 2, 1);
         let mut buf = ratatui::buffer::Buffer::empty(area);
         buf[(1, 0)].bg = app.chrome.theme.sel_bg;
-        draw_black_background(&mut buf, area);
+        draw_default_background(&mut buf, area, crate::theme::BLACK_BACKGROUND);
         assert_eq!(buf[(0, 0)].bg, crate::theme::BLACK_BACKGROUND);
         assert_eq!(
             buf[(1, 0)].bg,
             app.chrome.theme.sel_bg,
             "a fill stays on top"
         );
+    }
+
+    #[test]
+    fn omarchy_background_wins_over_black_without_overwriting_child_colors() {
+        let background = Color::Rgb(240, 235, 230);
+        let mut app = App::new();
+        app.chrome.black_background = true;
+        app.chrome.theme.background = Some(background);
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(60, 20)).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+        assert_eq!(terminal.backend().buffer()[(0, 0)].bg, background);
+
+        let area = Rect::new(0, 0, 2, 1);
+        let mut buf = ratatui::buffer::Buffer::empty(area);
+        buf[(1, 0)].bg = Color::Rgb(12, 34, 56);
+        draw_default_background(&mut buf, area, background);
+        assert_eq!(buf[(0, 0)].bg, background);
+        assert_eq!(buf[(1, 0)].bg, Color::Rgb(12, 34, 56));
     }
 
     #[test]
