@@ -4,10 +4,10 @@
 # permission prompt — under PROJECT TABS that carry each project's dots. The PREWARM POOL is off so
 # every launch is one of the scripted ones, `$SHELL` is a stub that prints a `cargo test` run for the
 # terminal card (and passes `-c` probes through to /bin/sh), and the pane sits along the bottom
-# (NEBULA_SHOT_PANE=right puts it beside the cards) so a band shows four cards across.
+# (QUAZAR_SHOT_PANE=right puts it beside the cards) so a band shows four cards across.
 mkdir -p "$WORK/data"
 cat > "$WORK/data/config.json" <<JSON
-{"prewarm_agents": false, "prewarm_sessions": false, "session_pane": "${NEBULA_SHOT_PANE:-bottom}",
+{"prewarm_agents": false, "prewarm_sessions": false, "session_pane": "${QUAZAR_SHOT_PANE:-bottom}",
  "claude_model": "opus", "claude_effort": "high", "codex_model": "gpt-5.6-sol", "codex_effort": "high"}
 JSON
 mk() {
@@ -30,7 +30,7 @@ printf 'CREATE TABLE tokens (id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);\
 printf 'pub mod token_store;\n' > "$FEAT/src/auth/token_store.rs"
 # shot.sh registers `$DEMO` with `$BIN add`; this wrapper registers the three projects instead.
 REAL_BIN="$BIN"
-cat > "$RUNTIME/nebula" <<WRAP
+cat > "$RUNTIME/quazar" <<WRAP
 #!/bin/sh
 if [ "\$1" = add ]; then
   "$REAL_BIN" add "$WORK/orbit-api" >/dev/null
@@ -39,11 +39,11 @@ if [ "\$1" = add ]; then
 fi
 exec "$REAL_BIN" "\$@"
 WRAP
-chmod +x "$RUNTIME/nebula"
-BIN="$RUNTIME/nebula"
+chmod +x "$RUNTIME/quazar"
+BIN="$RUNTIME/quazar"
 # Pull requests: one ready on feat/auth-tokens, one draft on fix/rate-limits, one with no checkout.
 cp -R "$HERE/fixtures" "$WORK/fx"
-export NEBULA_GH_FIXTURES="$WORK/fx"
+export QUAZAR_GH_FIXTURES="$WORK/fx"
 cat > "$WORK/fx/pr-list.json" <<'JSON'
 [
   {"number": 57, "title": "Move the token store to sqlite", "url": "https://github.com/orbit/orbit-api/pull/57", "isDraft": false, "headRefName": "feat/auth-tokens"},
@@ -75,16 +75,16 @@ esac
 SHELL
 chmod +x "$RUNTIME/shell"
 export SHELL="$RUNTIME/shell"
-export NEBULA_SHOT_BIN="$REAL_BIN" NEBULA_SHOT_COUNTER="$RUNTIME/launches"
+export QUAZAR_SHOT_BIN="$REAL_BIN" QUAZAR_SHOT_COUNTER="$RUNTIME/launches"
 cat > "$RUNTIME/agent" <<'AGENT'
 #!/bin/sh
 # Stand-in agent: launch N tells story N. The dialect posted to follows the harness the keys picked.
-n=$(cat "$NEBULA_SHOT_COUNTER" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$NEBULA_SHOT_COUNTER"
+n=$(cat "$QUAZAR_SHOT_COUNTER" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$QUAZAR_SHOT_COUNTER"
 dialect=claude
 case "$n" in 3) dialect=codex;; 6) dialect=opencode;; esac
 post() {
-  curl -sS -m 3 -X POST -H "Authorization: Bearer $NEBULA_API_TOKEN" -H 'Content-Type: application/json' \
-    -d "$2" "$NEBULA_API_URL/api/hooks/$dialect?agentId=$NEBULA_AGENT_ID&hookEvent=$1" >/dev/null 2>&1
+  curl -sS -m 3 -X POST -H "Authorization: Bearer $QUAZAR_API_TOKEN" -H 'Content-Type: application/json' \
+    -d "$2" "$QUAZAR_API_URL/api/hooks/$dialect?agentId=$QUAZAR_AGENT_ID&hookEvent=$1" >/dev/null 2>&1
 }
 say() { printf '%s\r\n' "$@"; }
 case "$n" in
@@ -131,8 +131,8 @@ case "$n" in
          "Entries are newest first and Unreleased stays pinned on top."
      sleep 0.3; post Stop '{"session_id":"shot-6"}' ;;
 esac
-"$NEBULA_SHOT_BIN" rename "$title" >/dev/null 2>&1 || true
+"$QUAZAR_SHOT_BIN" rename "$title" >/dev/null 2>&1 || true
 exec /bin/cat
 AGENT
 chmod +x "$RUNTIME/agent"
-export NEBULA_AGENT_CMD="$RUNTIME/agent"
+export QUAZAR_AGENT_CMD="$RUNTIME/agent"

@@ -7,22 +7,22 @@
 
 ## 📦 By crate <a id="by-crate"></a>
 
-### 🧱 nebula-core
+### 🧱 quazar-core
 
 - **<Hook>.** <The type, flag or protocol field, and what it means for the user, one sentence.>
 
-### ⚙ nebula-daemon
+### ⚙ quazar-daemon
 
 - **<Hook>.** <What the DAEMON now does, the hook route or mechanism in backticks.>
 - **<Hook>.** <…>
 
-### 🖥 nebula-tui
+### 🖥 quazar-tui
 
 - **<Hook>.** <What the user sees, the key in backticks, the panel it lives in.>
 
-### 💻 nebula (CLI)
+### 💻 quazar (CLI)
 
-- **<Hook>.** <The subcommand or flag, `nebula <sub>`, and what it prints.>
+- **<Hook>.** <The subcommand or flag, `quazar <sub>`, and what it prints.>
 
 ### 📚 docs
 
@@ -33,10 +33,10 @@
 ```mermaid
 flowchart LR
   subgraph ws["workspace"]
-    core["nebula-core"]
-    daemon["nebula-daemon"]
-    tui["nebula-tui"]
-    cli["nebula"]
+    core["quazar-core"]
+    daemon["quazar-daemon"]
+    tui["quazar-tui"]
+    cli["quazar"]
   end
   cli --> daemon
   cli --> tui
@@ -54,7 +54,7 @@ flowchart LR
 
 | <Caption: what the TUI shows after the change> |
 |---|
-| ![<alt>](https://raw.githubusercontent.com/AgentSystemLabs/nebula/pr-assets/<branch>/<after>.png) |
+| ![<alt>](https://raw.githubusercontent.com/treramey/Quasar/pr-assets/<branch>/<after>.png) |
 
 <!-- A pure daemon/core change: a fenced block of the terminal output instead, plus one line on why there is no PNG. -->
 
@@ -81,17 +81,17 @@ flowchart LR
 
 ## 🔧 Technical overview <a id="technical-overview"></a>
 
-- **nebula-core.** `crates/nebula-core/src/<file>.rs` — <clause>. <PROTOCOL VERSION N → N+1, or "unchanged".>
-- **nebula-daemon.** `crates/nebula-daemon/src/<file>.rs` — <clause>; `…/<file>.rs` — <clause>.
-- **nebula-tui.** `crates/nebula-tui/src/<file>.rs` — <clause>.
-- **nebula.** `crates/nebula/src/<file>.rs` — <clause>.
+- **quazar-core.** `crates/quazar-core/src/<file>.rs` — <clause>. <PROTOCOL VERSION N → N+1, or "unchanged".>
+- **quazar-daemon.** `crates/quazar-daemon/src/<file>.rs` — <clause>; `…/<file>.rs` — <clause>.
+- **quazar-tui.** `crates/quazar-tui/src/<file>.rs` — <clause>.
+- **quazar.** `crates/quazar/src/<file>.rs` — <clause>.
 - **Not done.** <The approach rejected and why.>
 - **Gate.** <`make ci` green — N tests; or what did not run and why.>
 
 ## 📝 Notes <a id="notes"></a>
 
 - <Merge state, conflicts.>
-- <Upgrade note: `nebula kill` first when the PROTOCOL VERSION moved.>
+- <Upgrade note: `quazar kill` first when the PROTOCOL VERSION moved.>
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 

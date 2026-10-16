@@ -1,0 +1,34 @@
+[package]
+name = "quazar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+default-run = "quazar"
+
+[[bin]]
+name = "quazar"
+path = "src/main.rs"
+
+[[bin]]
+name = "quasar"
+path = "src/quasar.rs"
+
+[[bin]]
+name = "nebula"
+path = "src/nebula.rs"
+
+[dependencies]
+quazar-core = { workspace = true }
+quazar-daemon = { workspace = true }
+quazar-tui = { workspace = true }
+anyhow = { workspace = true }
+clap = { version = "4", features = ["derive", "wrap_help"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+serde_json = { workspace = true }
+portable-pty = { workspace = true }
+vt100 = { workspace = true }

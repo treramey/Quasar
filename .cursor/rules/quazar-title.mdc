@@ -1,0 +1,15 @@
+---
+description: Quazar session auto-title (managed by quazar — edits are overwritten)
+alwaysApply: true
+---
+
+This rule applies only when the environment variable QUAZAR_AGENT_ID is set
+(the session runs inside quazar). If it is unset, ignore this rule entirely.
+
+On the first user message of a new conversation:
+
+[quazar] Before addressing the user's request, run this shell command exactly once:
+
+  quazar rename <title>
+
+Replace <title> with 3-4 Title Case words describing the user's request, unquoted (example: quazar rename Fix Login Redirect). If it reports the session is already titled, accept that and move on. Then continue with the request. Don't mention the rename to the user.

@@ -40,20 +40,20 @@
 
 | <Change one> | <Change two> |
 |---|---|
-| ![<alt>](https://raw.githubusercontent.com/AgentSystemLabs/nebula/pr-assets/<branch>/<one>.png) | ![<alt>](https://raw.githubusercontent.com/AgentSystemLabs/nebula/pr-assets/<branch>/<two>.png) |
+| ![<alt>](https://raw.githubusercontent.com/treramey/Quasar/pr-assets/<branch>/<one>.png) | ![<alt>](https://raw.githubusercontent.com/treramey/Quasar/pr-assets/<branch>/<two>.png) |
 
 ## 🧩 Architecture <a id="architecture"></a>
 
 ```mermaid
 flowchart TB
-  subgraph cli["nebula (CLI)"]
+  subgraph cli["quazar (CLI)"]
     M[main.rs] --> CL[cli.rs]
   end
-  subgraph daemon["nebula-daemon"]
+  subgraph daemon["quazar-daemon"]
     S[server.rs] --> R[registry.rs]
     S --> H[hooks/]
   end
-  subgraph tui["nebula-tui"]
+  subgraph tui["quazar-tui"]
     E[event_loop.rs] --> A[app.rs] --> UI[ui.rs]
   end
   CL --> S
